@@ -138,11 +138,11 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 	}
 
 	/* Create and build the CL program. */
-	const char* kernelCharArray = new char[_kernelString.size()];
-	kernelCharArray = _kernelString.c_str();
+	const char* kernelAsChar = new char[_kernelString.size()];
+	kernelAsChar = _kernelString.c_str();
 	_program = clCreateProgramWithSource(
 		_context, 1,
-		(const char **)& kernelCharArray, NULL,
+		(const char **)& kernelAsChar, NULL,
 		&result);
 
 	if (result != CL_SUCCESS)
@@ -158,26 +158,20 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 	{
 		std::cout << "There were build errors: \n";
 
-		// Determine the size of the log
-		size_t log_size;
-		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+		/* Determine CL error log size. */
+		size_t errorLogSize;
+		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &errorLogSize);
 
-		// Allocate memory for the log
-		char *log = (char *)malloc(log_size);
-
-		// Get the log
-		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
-
-		// Print the log
-		printf("%s\n", log);
+		/* Get and print the CL error log. */
+		char *errorLog = (char *)malloc(errorLogSize);
+		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, errorLogSize, errorLog, NULL);
+		std::cout << errorLog << "\n\n";
 	}
 	else if (result != CL_SUCCESS)
 	{
 		std::cout << "Failed to build program.\n\n";
 		return false;
 	}
-
-
 
 	///* Create the kernel. */
 	//_kernel = clCreateKernel(_program, "halveBrightness", &result);
