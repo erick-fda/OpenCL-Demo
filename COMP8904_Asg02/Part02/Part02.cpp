@@ -28,6 +28,7 @@
 	Forward Declarations
 ========================================================================================*/
 void GeneratePixels();
+void ExecuteSerially();
 void GetAvailablePlatforms();
 cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
@@ -40,11 +41,13 @@ bool CheckKernelResults();
 /*========================================================================================
 	Fields
 ========================================================================================*/
-const int NUM_PIXELS = 10;
+const int NUM_PIXELS = 1000000;
 std::vector<cl_float4> _startPixels;
 std::vector<cl_float4> _resultPixels;
 cl_float4* _startPixelHostBuffer;
 cl_float4* _resultPixelHostBuffer;
+
+int _timeTaken = 0;
 
 cl_uint _numPlatforms;
 std::vector<cl_platform_id> _platformIds;
@@ -76,6 +79,10 @@ int main()
 {
 	GeneratePixels();
 
+	/* Execute on host. */
+	ExecuteSerially();
+
+	/* Find CL devices. */
 	GetAvailablePlatforms();
 
 	if (!GetCpuAndGpu())
@@ -84,17 +91,39 @@ int main()
 		return 1;
 	}
 
+	/* Execute on CPU. */
 	if (!SetUpCL(_cpuPlatform, _cpuDevice))
 	{
 		std::cin.ignore();
 		return 1;
 	}
 
+	std::cout << "Executing using OpenCL on CPU. Timer start.\n\n";
+	_timeTaken = clock();
 	if (!ExecuteKernel())
 	{
 		std::cin.ignore();
 		return 1;
 	}
+	_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	std::cout << "Finished executing using OpenCL on CPU. Took " << _timeTaken << " ms.\n\n";
+
+	///* Execute on GPU. */
+	//if (!SetUpCL(_gpuPlatform, _gpuDevice))
+	//{
+	//	std::cin.ignore();
+	//	return 1;
+	//}
+
+	//std::cout << "Executing using OpenCL on GPU. Timer start.\n\n";
+	//_timeTaken = clock();
+	//if (!ExecuteKernel())
+	//{
+	//	std::cin.ignore();
+	//	return 1;
+	//}
+	//_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	//std::cout << "Finished executing using OpenCL on GPU. Took " << _timeTaken << " ms.\n\n";
 
 	if (!CheckKernelResults())
 	{
@@ -487,6 +516,18 @@ void GetAvailablePlatforms()
 		}
 	}
 	std::cout << "\n";
+}
+
+/**
+	Halves the brightness of the pixels serially.
+*/
+void ExecuteSerially()
+{
+	std::cout << "Executing serially. Timer start.\n\n";
+	_timeTaken = clock();
+	Pixel::HalveBrightness(_startPixels, _resultPixels);
+	_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	std::cout << "Finished executing serially. Took " << _timeTaken << " ms.\n\n";
 }
 
 /**
