@@ -20,12 +20,24 @@
 #include <CL/cl.h>
 
 /*========================================================================================
+	Forward Declarations
+========================================================================================*/
+void GetAvailablePlatforms();
+cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
+cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
+bool GetCpuAndGpu();
+
+/*========================================================================================
 	Fields
 ========================================================================================*/
 cl_uint numPlatforms;
 std::vector<cl_platform_id> platformIds;
 std::map<cl_platform_id, std::vector<cl_device_id>> platforms;
-cl_platform_id cpuToUse;
+
+cl_platform_id cpuPlatform;
+cl_platform_id gpuPlatform;
+cl_device_id cpuDevice;
+cl_device_id gpuDevice;
 
 /*========================================================================================
 	Main Function
@@ -36,15 +48,120 @@ cl_platform_id cpuToUse;
 */
 int main()
 {
-	int result = 0;
+	GetAvailablePlatforms();
 
+	if (!GetCpuAndGpu())
+	{
+		return 1;
+	}
+
+	
+
+	std::cin.ignore();
+	return 0;
+}
+
+/**
+	Get the CPU and GPU.
+*/
+bool GetCpuAndGpu()
+{
+	/* Find the platform with the GPU. */
+	gpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_GPU);
+	if (gpuPlatform)
+	{
+		gpuDevice = GetFirstDeviceOfTypeFromPlatform(gpuPlatform, CL_DEVICE_TYPE_GPU);
+	}
+	else
+	{
+		std::cout << "ERROR: No GPU could be detected on any available platform.\n\n";
+		std::cin.ignore();
+		return false;
+	}
+
+	/* Check the GPU platform for a CPU device. */
+	cpuDevice = GetFirstDeviceOfTypeFromPlatform(gpuPlatform, CL_DEVICE_TYPE_CPU);
+
+	if (cpuDevice)
+	{
+		cpuPlatform = gpuPlatform;
+	}
+	else
+	{
+		/* If the CPU is not on the same platform as the GPU, check the other platforms. */
+		cpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_CPU);
+
+		/* Get the CPU device if we found a platform for it and error out if we didn't. */
+		if (cpuPlatform)
+		{
+			cpuDevice = GetFirstDeviceOfTypeFromPlatform(cpuPlatform, CL_DEVICE_TYPE_CPU);
+		}
+		else
+		{
+			std::cout << "ERROR: No CPU could be detected on any available platform.\n\n";
+			std::cin.ignore();
+			return false;
+		}
+	}
+
+	/* Print out info on CPU and GPU. */
+	std::cout << "Platform containing CPU is " << cpuPlatform << "\n";
+	std::cout << "CPU is device " << cpuDevice << "\n\n";
+	std::cout << "Platform containing GPU is " << gpuPlatform << "\n";
+	std::cout << "GPU is device " << gpuDevice << "\n\n";
+
+	return true;
+}
+
+/**
+	Returns the first available platform that contains a device of the given type.
+	Returns 0 if no platform has a device of the given type.
+*/
+cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind)
+{
+	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in platforms)
+	{
+		if (GetFirstDeviceOfTypeFromPlatform(eachPlatform.first, typeToFind))
+		{
+			return eachPlatform.first;
+		}
+	}
+
+	return 0;
+}
+
+/**
+	Returns the ID of the first device of the given type on the given platform.
+	Returns 0 if there is no device of the given type on the given platform.
+*/
+cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToFind)
+{
+	for each (cl_device_id eachDevice in platforms[platform])
+	{
+		cl_device_type deviceType;
+		clGetDeviceInfo(eachDevice, CL_DEVICE_TYPE, sizeof(cl_device_id), &deviceType, nullptr);
+
+		if (deviceType == typeToFind)
+		{
+			return eachDevice;
+		}
+	}
+
+	return 0;
+}
+
+/**
+	Get the OpenCL platforms and devices available.
+*/
+void GetAvailablePlatforms()
+{
 	/* Get the number of available platforms. */
 	numPlatforms = 0;
 	clGetPlatformIDs(0, nullptr, &numPlatforms);
 
 	/* Get the IDs of available platforms. */
 	platformIds = std::vector<cl_platform_id>(numPlatforms);
-	result = clGetPlatformIDs(numPlatforms, platformIds.data(), nullptr);
+	clGetPlatformIDs(numPlatforms, platformIds.data(), nullptr);
 
 	/* Get the devices for each platform. */
 	platforms = std::map<cl_platform_id, std::vector<cl_device_id>>();
@@ -86,33 +203,4 @@ int main()
 		}
 	}
 	std::cout << "\n";
-
-	/* Identify which CPU to use. */
-	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in platforms)
-	{
-		bool isCpu = true;
-
-		for each (cl_device_id eachDevice in eachPlatform.second)
-		{
-			cl_device_type deviceType;
-			clGetDeviceInfo(eachDevice, CL_DEVICE_TYPE, sizeof(cl_device_id), &deviceType, nullptr);
-
-			if (deviceType == CL_DEVICE_TYPE_GPU)
-			{
-				isCpu = false;
-				break;
-			}
-		}
-
-		if (isCpu)
-		{
-			cpuToUse = eachPlatform.first;
-			break;
-		}
-	}
-
-	/* Create open  */
-
-	std::cin.ignore();
-	return 0;
 }
