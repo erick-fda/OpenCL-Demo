@@ -13,24 +13,31 @@
 /*========================================================================================
 	Dependencies
 ========================================================================================*/
+#include <ctime>
 #include <iostream>
 #include <map>
+#include <random>
 #include <vector>
-
 #include <CL/cl.h>
+#include "Pixel.h"
 
 /*========================================================================================
 	Forward Declarations
 ========================================================================================*/
+void GeneratePixels();
 void GetAvailablePlatforms();
 cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
 bool GetCpuAndGpu();
-bool CreateContextForPlatform(cl_platform_id platform);
+bool SetUpCL(cl_platform_id platform, cl_device_id device);
 
 /*========================================================================================
 	Fields
 ========================================================================================*/
+const int NUM_PIXELS = 10;
+std::vector<cl_float4> _startPixels;
+std::vector<cl_float4> _resultPixels;
+
 cl_uint _numPlatforms;
 std::vector<cl_platform_id> _platformIds;
 std::map<cl_platform_id, std::vector<cl_device_id>> _platforms;
@@ -42,8 +49,9 @@ cl_device_id _gpuDevice;
 
 cl_context _context;
 
-const cl_uint NUM_PIXELS = 10;
-std::vector<cl_float4> _pixels;
+size_t _bufferSize = sizeof(cl_float4) * NUM_PIXELS;
+cl_mem _clStartPixels;
+cl_mem _clResultPixels;
 
 /*========================================================================================
 	Main Function
@@ -54,6 +62,8 @@ std::vector<cl_float4> _pixels;
 */
 int main()
 {
+	GeneratePixels();
+
 	GetAvailablePlatforms();
 
 	if (!GetCpuAndGpu())
@@ -62,7 +72,7 @@ int main()
 		return 1;
 	}
 
-	if (!CreateContextForPlatform(_cpuPlatform))
+	if (!SetUpCL(_cpuPlatform, _cpuDevice))
 	{
 		std::cin.ignore();
 		return 1;
@@ -75,24 +85,58 @@ int main()
 /**
 	Create the OpenCL context.
 */
-bool CreateContextForPlatform(cl_platform_id platform)
+bool SetUpCL(cl_platform_id platform, cl_device_id device)
 {
+	cl_int result = 0;
+
 	/* Initialize properties for the context. */
-	const cl_context_properties contextProperties[] =
+	/*const cl_context_properties contextProperties[] =
 	{
 		CL_CONTEXT_PLATFORM,
 		reinterpret_cast<cl_context_properties>(platform),
 		0,
 		0
-	};
+	};*/
 
 	/* Create the context. */
-	cl_int result = 0;
-	_context = clCreateContext(
+	/*_context = clCreateContext(
 		contextProperties, _platforms[platform].size(),
 		_platforms[platform].data(), nullptr,
 		nullptr, &result
+	);*/
+
+	_context = clCreateContext(0, 1, &device, NULL, NULL, &result);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create OpenCL context.\n\n";
+		return false;
+	}
+
+	/* Create input and output buffers. */
+	_clStartPixels = clCreateBuffer(
+		_context, CL_MEM_READ_ONLY,
+		_bufferSize, _startPixels.data(),
+		&result
 	);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create input buffer.\n\n";
+		return false;
+	}
+
+	_clResultPixels = clCreateBuffer(
+		_context, CL_MEM_WRITE_ONLY,
+		_bufferSize, _resultPixels.data(),
+		&result
+	);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create output buffer.\n\n";
+		return false;
+	}
 
 	return (result == CL_SUCCESS);
 }
@@ -237,4 +281,24 @@ void GetAvailablePlatforms()
 		}
 	}
 	std::cout << "\n";
+}
+
+/**
+	Generates pixels to use.
+*/
+void GeneratePixels()
+{
+	/* Initialize fields. */
+	_startPixels = std::vector<cl_float4>();
+	_resultPixels = std::vector<cl_float4>();
+
+	/* Seed the random number generator. */
+	srand((unsigned int)time(nullptr));
+
+	/* Generate pixels. */
+	std::cout << "Generating pixels...\n\n";
+	for (int i = 0; i < NUM_PIXELS; i++)
+	{
+		_startPixels.push_back(Pixel::MakeRandomPixel());
+	}
 }
