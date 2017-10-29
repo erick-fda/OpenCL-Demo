@@ -28,19 +28,26 @@
 	Forward Declarations
 ========================================================================================*/
 void GeneratePixels();
+void ExecuteSerially();
 void GetAvailablePlatforms();
 cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
 bool GetCpuAndGpu();
 bool SetUpCL(cl_platform_id platform, cl_device_id device);
 bool ReadKernelFile();
+bool ExecuteKernel();
+bool CheckKernelResults();
 
 /*========================================================================================
 	Fields
 ========================================================================================*/
-const int NUM_PIXELS = 10;
+const int NUM_PIXELS = 1000000;
 std::vector<cl_float4> _startPixels;
 std::vector<cl_float4> _resultPixels;
+cl_float4* _startPixelHostBuffer;
+cl_float4* _resultPixelHostBuffer;
+
+int _timeTaken = 0;
 
 cl_uint _numPlatforms;
 std::vector<cl_platform_id> _platformIds;
@@ -72,6 +79,10 @@ int main()
 {
 	GeneratePixels();
 
+	/* Execute on host. */
+	ExecuteSerially();
+
+	/* Find CL devices. */
 	GetAvailablePlatforms();
 
 	if (!GetCpuAndGpu())
@@ -80,14 +91,124 @@ int main()
 		return 1;
 	}
 
+	/* Execute on CPU. */
 	if (!SetUpCL(_cpuPlatform, _cpuDevice))
 	{
 		std::cin.ignore();
 		return 1;
 	}
 
+	std::cout << "Executing using OpenCL on CPU. Timer start.\n\n";
+	_timeTaken = clock();
+	if (!ExecuteKernel())
+	{
+		std::cin.ignore();
+		return 1;
+	}
+	_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	std::cout << "Finished executing using OpenCL on CPU. Took " << _timeTaken << " ms.\n\n";
+
+	///* Execute on GPU. */
+	//if (!SetUpCL(_gpuPlatform, _gpuDevice))
+	//{
+	//	std::cin.ignore();
+	//	return 1;
+	//}
+
+	//std::cout << "Executing using OpenCL on GPU. Timer start.\n\n";
+	//_timeTaken = clock();
+	//if (!ExecuteKernel())
+	//{
+	//	std::cin.ignore();
+	//	return 1;
+	//}
+	//_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	//std::cout << "Finished executing using OpenCL on GPU. Took " << _timeTaken << " ms.\n\n";
+
+	if (!CheckKernelResults())
+	{
+		std::cin.ignore();
+		return 1;
+	}
+
+	std::cout << "OpenCL example finished successfully!\n\n";
+
 	std::cin.ignore();
 	return 0;
+}
+
+/**
+	Check the results of executing the kernel.
+*/
+bool CheckKernelResults()
+{
+	cl_int result = 0;
+
+	if (_resultPixelHostBuffer == nullptr)
+	{
+		std::cout << "Host buffer is null.\n\n";
+		return false;
+	}
+
+	result = clEnqueueReadBuffer(
+		_commandQueue, _clResultPixels,
+		CL_TRUE, 0,
+		_bufferSize, _resultPixelHostBuffer,
+		0, NULL,
+		NULL
+	);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to read output buffer.\n\n";
+		return false;
+	}
+
+	std::cout << "Finished reading output buffer successfully.\n\n";
+
+	/* Print out a sample from the results. */
+	std::cout << "Sample initial pixel: \n" <<
+		"\tX: " << _startPixels[0].x << "\n"
+		"\tY: " << _startPixels[0].y << "\n"
+		"\tZ: " << _startPixels[0].z << "\n"
+		"\tW: " << _startPixels[0].w << "\n\n";
+	std::cout << "Corresponding result pixel: \n" <<
+		"\tX: " << _resultPixelHostBuffer[0].x << "\n"
+		"\tY: " << _resultPixelHostBuffer[0].y << "\n"
+		"\tZ: " << _resultPixelHostBuffer[0].z << "\n"
+		"\tW: " << _resultPixelHostBuffer[0].w << "\n\n";
+
+	return true;
+}
+
+/**
+	Executes the kernel.
+*/
+bool ExecuteKernel()
+{
+	cl_int result = 0;
+
+	/* Execute the kernel. */
+	size_t localSize = 64;
+	size_t globalSize = ceil(NUM_PIXELS / (float)localSize)*localSize;
+	result = clEnqueueNDRangeKernel(
+		_commandQueue, _kernel,
+		1, NULL,
+		&globalSize, &localSize,
+		0, NULL,
+		NULL
+	);
+
+	clFinish(_commandQueue);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to execute kernel.\n\n";
+		return false;
+	}
+
+	std::cout << "Finished executing kernel successfully.\n\n";
+	return true;
 }
 
 /**
@@ -96,21 +217,6 @@ int main()
 bool SetUpCL(cl_platform_id platform, cl_device_id device)
 {
 	cl_int result = 0;
-
-	///* Initialize properties for the context. */
-	//const cl_context_properties contextProperties[] =
-	//{
-	//	CL_CONTEXT_PLATFORM,
-	//	reinterpret_cast<cl_context_properties>(platform),
-	//	0,
-	//	0
-	//};
-
-	//_context = clCreateContext(
-	//	contextProperties, _platforms[platform].size(),
-	//	_platforms[platform].data(), nullptr,
-	//	nullptr, &result
-	//);
 
 	/* Read the kernel source. */
 	if (!ReadKernelFile())
@@ -173,41 +279,67 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 		return false;
 	}
 
-	///* Create the kernel. */
-	//_kernel = clCreateKernel(_program, "halveBrightness", &result);
+	/* Create the kernel. */
+	_kernel = clCreateKernel(_program, "halveBrightness", &result);
 
-	//if (result != CL_SUCCESS)
-	//{
-	//	std::cout << "Failed to create kernel.\n\n";
-	//	return false;
-	//}
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create kernel.\n\n";
+		return false;
+	}
 
-	///* Create input and output buffers. */
-	//_clStartPixels = clCreateBuffer(
-	//	_context, CL_MEM_READ_ONLY,
-	//	_bufferSize, _startPixels.data(),
-	//	&result
-	//);
+	/* Create input and output buffers. */
+	_clStartPixels = clCreateBuffer(
+		_context, CL_MEM_READ_ONLY,
+		_bufferSize, NULL,
+		&result
+	);
 
-	//if (result != CL_SUCCESS)
-	//{
-	//	std::cout << "Failed to create input buffer.\n\n";
-	//	return false;
-	//}
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create input buffer.\n\n";
+		return false;
+	}
 
-	//_clResultPixels = clCreateBuffer(
-	//	_context, CL_MEM_WRITE_ONLY,
-	//	_bufferSize, _resultPixels.data(),
-	//	&result
-	//);
+	_clResultPixels = clCreateBuffer(
+		_context, CL_MEM_WRITE_ONLY,
+		_bufferSize, NULL,
+		&result
+	);
 
-	//if (result != CL_SUCCESS)
-	//{
-	//	std::cout << "Failed to create output buffer.\n\n";
-	//	return false;
-	//}
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create output buffer.\n\n";
+		return false;
+	}
 
-	return (result == CL_SUCCESS);
+	/* Write data to the input buffer. */
+	result = clEnqueueWriteBuffer(
+		_commandQueue, _clStartPixels,
+		CL_TRUE, 0,
+		_bufferSize, _startPixelHostBuffer,
+		0, NULL,
+		NULL
+	);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to write to the input buffer.\n\n";
+		return false;
+	}
+
+	/* Set kernel arguments. */
+	result = clSetKernelArg(_kernel, 0, sizeof(cl_mem), &_clStartPixels);
+	result |= clSetKernelArg(_kernel, 1, sizeof(cl_mem), &_clResultPixels);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to set kernel arguments.\n\n";
+		return false;
+	}
+
+	std::cout << "Finished setting up CL program successfully.\n\n";
+	return true;
 }
 
 /**
@@ -387,6 +519,18 @@ void GetAvailablePlatforms()
 }
 
 /**
+	Halves the brightness of the pixels serially.
+*/
+void ExecuteSerially()
+{
+	std::cout << "Executing serially. Timer start.\n\n";
+	_timeTaken = clock();
+	Pixel::HalveBrightness(_startPixels, _resultPixels);
+	_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
+	std::cout << "Finished executing serially. Took " << _timeTaken << " ms.\n\n";
+}
+
+/**
 	Generates pixels to use.
 */
 void GeneratePixels()
@@ -404,4 +548,9 @@ void GeneratePixels()
 	{
 		_startPixels.push_back(Pixel::MakeRandomPixel());
 	}
+
+	_startPixelHostBuffer = (cl_float4*)malloc(_bufferSize);
+	_resultPixelHostBuffer = (cl_float4*)malloc(_bufferSize);
+	_startPixelHostBuffer = _startPixels.data();
+	_resultPixelHostBuffer = new cl_float4[NUM_PIXELS];
 }
