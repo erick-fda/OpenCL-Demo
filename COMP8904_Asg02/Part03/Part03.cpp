@@ -1,8 +1,8 @@
 /*===================================================================================*//**
-	Part 02
+	Part 03
 	
 	Example of calculating average colour for a collection of pixels using OpenCL to 
-	run on the CPU only.
+	run on the GPU only.
 
     @author Erick Fernandez de Arteaga, John Janzen
 	@version 0.0.0
@@ -91,14 +91,14 @@ int main()
 		return 1;
 	}
 
-	/* Execute on CPU. */
-	if (!SetUpCL(_cpuPlatform, _cpuDevice))
+	/* Execute on GPU. */
+	if (!SetUpCL(_gpuPlatform, _gpuDevice))
 	{
 		std::cin.ignore();
 		return 1;
 	}
 
-	std::cout << "Executing using OpenCL on CPU. Timer start.\n\n";
+	std::cout << "Executing using OpenCL on GPU. Timer start.\n\n";
 	_timeTaken = clock();
 	if (!ExecuteKernel())
 	{
@@ -106,7 +106,7 @@ int main()
 		return 1;
 	}
 	_timeTaken = (clock() - _timeTaken) / (double)CLOCKS_PER_SEC * 1000;
-	std::cout << "Finished executing using OpenCL on CPU. Took " << _timeTaken << " ms.\n\n";
+	std::cout << "Finished executing using OpenCL on GPU. Took " << _timeTaken << " ms.\n\n";
 
 	if (!CheckKernelResults())
 	{
