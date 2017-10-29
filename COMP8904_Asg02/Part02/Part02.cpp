@@ -14,10 +14,13 @@
 	Dependencies
 ========================================================================================*/
 #include <ctime>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <random>
+#include <string>
 #include <vector>
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #include <CL/cl.h>
 #include "Pixel.h"
 
@@ -30,6 +33,7 @@ cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
 bool GetCpuAndGpu();
 bool SetUpCL(cl_platform_id platform, cl_device_id device);
+bool ReadKernelFile();
 
 /*========================================================================================
 	Fields
@@ -48,7 +52,9 @@ cl_device_id _cpuDevice;
 cl_device_id _gpuDevice;
 
 cl_context _context;
-
+cl_command_queue _commandQueue;
+std::string _kernelFile = "Kernel.cl";
+std::string _kernel;
 size_t _bufferSize = sizeof(cl_float4) * NUM_PIXELS;
 cl_mem _clStartPixels;
 cl_mem _clResultPixels;
@@ -89,56 +95,98 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 {
 	cl_int result = 0;
 
-	/* Initialize properties for the context. */
-	/*const cl_context_properties contextProperties[] =
+	///* Initialize properties for the context. */
+	//const cl_context_properties contextProperties[] =
+	//{
+	//	CL_CONTEXT_PLATFORM,
+	//	reinterpret_cast<cl_context_properties>(platform),
+	//	0,
+	//	0
+	//};
+
+	//_context = clCreateContext(
+	//	contextProperties, _platforms[platform].size(),
+	//	_platforms[platform].data(), nullptr,
+	//	nullptr, &result
+	//);
+
+	/* Read the kernel source. */
+	if (!ReadKernelFile())
 	{
-		CL_CONTEXT_PLATFORM,
-		reinterpret_cast<cl_context_properties>(platform),
-		0,
-		0
-	};*/
+		std::cout << "Failed to read kernel file.\n\n";
+		return false;
+	}
 
 	/* Create the context. */
-	/*_context = clCreateContext(
-		contextProperties, _platforms[platform].size(),
-		_platforms[platform].data(), nullptr,
-		nullptr, &result
-	);*/
-
 	_context = clCreateContext(0, 1, &device, NULL, NULL, &result);
 
 	if (result != CL_SUCCESS)
 	{
-		std::cout << "Failed to create OpenCL context.\n\n";
+		std::cout << "Failed to create context.\n\n";
 		return false;
 	}
 
-	/* Create input and output buffers. */
-	_clStartPixels = clCreateBuffer(
-		_context, CL_MEM_READ_ONLY,
-		_bufferSize, _startPixels.data(),
-		&result
-	);
+	/* Create the command queue. */
+	_commandQueue = clCreateCommandQueue(_context, device, 0, &result);
 
 	if (result != CL_SUCCESS)
 	{
-		std::cout << "Failed to create input buffer.\n\n";
+		std::cout << "Failed to create command queue.\n\n";
 		return false;
 	}
 
-	_clResultPixels = clCreateBuffer(
-		_context, CL_MEM_WRITE_ONLY,
-		_bufferSize, _resultPixels.data(),
-		&result
-	);
+	///* Create input and output buffers. */
+	//_clStartPixels = clCreateBuffer(
+	//	_context, CL_MEM_READ_ONLY,
+	//	_bufferSize, _startPixels.data(),
+	//	&result
+	//);
 
-	if (result != CL_SUCCESS)
-	{
-		std::cout << "Failed to create output buffer.\n\n";
-		return false;
-	}
+	//if (result != CL_SUCCESS)
+	//{
+	//	std::cout << "Failed to create input buffer.\n\n";
+	//	return false;
+	//}
+
+	//_clResultPixels = clCreateBuffer(
+	//	_context, CL_MEM_WRITE_ONLY,
+	//	_bufferSize, _resultPixels.data(),
+	//	&result
+	//);
+
+	//if (result != CL_SUCCESS)
+	//{
+	//	std::cout << "Failed to create output buffer.\n\n";
+	//	return false;
+	//}
 
 	return (result == CL_SUCCESS);
+}
+
+/**
+	Reads in the contents of the kernel file.
+*/
+bool ReadKernelFile()
+{
+	std::ifstream fileStream;
+	fileStream.open(_kernelFile);
+
+	if(!fileStream)
+	{
+		std::cout << "Failed to open kernel file.";
+		return false;
+	}
+
+	std::string eachLine;
+	while (std::getline(fileStream, eachLine))
+	{
+		_kernel += eachLine;
+	}
+	fileStream.close();
+
+	std::cout << "Kernel file contents: \n" << _kernel;
+
+	return true;
 }
 
 /**
