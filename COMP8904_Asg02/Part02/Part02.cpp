@@ -26,6 +26,7 @@ void GetAvailablePlatforms();
 cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind);
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToCheck);
 bool GetCpuAndGpu();
+bool CreateContextForPlatform(cl_platform_id platform);
 
 /*========================================================================================
 	Fields
@@ -39,12 +40,14 @@ cl_platform_id gpuPlatform;
 cl_device_id cpuDevice;
 cl_device_id gpuDevice;
 
+cl_context context;
+
 /*========================================================================================
 	Main Function
 ========================================================================================*/
 /**
-	Creates a collection of "pixels" (represented by float4s indicating RGBA values) and 
-	calculates the average color for the pixels.
+	Example of calculating average colour for a collection of pixels using OpenCL to 
+	run on the CPU only.
 */
 int main()
 {
@@ -52,13 +55,43 @@ int main()
 
 	if (!GetCpuAndGpu())
 	{
+		std::cin.ignore();
 		return 1;
 	}
 
-	
+	if (!CreateContextForPlatform(cpuPlatform))
+	{
+		std::cin.ignore();
+		return 1;
+	}
 
 	std::cin.ignore();
 	return 0;
+}
+
+/**
+	Create the OpenCL context.
+*/
+bool CreateContextForPlatform(cl_platform_id platform)
+{
+	/* Initialize properties for the context. */
+	const cl_context_properties contextProperties[] =
+	{
+		CL_CONTEXT_PLATFORM,
+		reinterpret_cast<cl_context_properties>(platform),
+		0,
+		0
+	};
+
+	/* Create the context. */
+	cl_int result = 0;
+	context = clCreateContext(
+		contextProperties, platforms[platform].size(),
+		platforms[platform].data(), nullptr,
+		nullptr, &result
+	);
+
+	return (result == CL_SUCCESS);
 }
 
 /**
@@ -75,7 +108,6 @@ bool GetCpuAndGpu()
 	else
 	{
 		std::cout << "ERROR: No GPU could be detected on any available platform.\n\n";
-		std::cin.ignore();
 		return false;
 	}
 
@@ -99,7 +131,6 @@ bool GetCpuAndGpu()
 		else
 		{
 			std::cout << "ERROR: No CPU could be detected on any available platform.\n\n";
-			std::cin.ignore();
 			return false;
 		}
 	}
