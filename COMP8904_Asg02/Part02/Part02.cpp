@@ -53,8 +53,10 @@ cl_device_id _gpuDevice;
 
 cl_context _context;
 cl_command_queue _commandQueue;
-std::string _kernelFile = "Kernel.cl";
-std::string _kernel;
+std::string _kernelFilePath = "Kernel.cl";
+std::string _kernelString = "";
+cl_program _program;
+cl_kernel _kernel;
 size_t _bufferSize = sizeof(cl_float4) * NUM_PIXELS;
 cl_mem _clStartPixels;
 cl_mem _clResultPixels;
@@ -135,6 +137,57 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 		return false;
 	}
 
+	/* Create and build the CL program. */
+	const char* kernelCharArray = new char[_kernelString.size()];
+	kernelCharArray = _kernelString.c_str();
+	_program = clCreateProgramWithSource(
+		_context, 1,
+		(const char **)& kernelCharArray, NULL,
+		&result);
+
+	if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to create program.\n\n";
+		return false;
+	}
+
+	result = clBuildProgram(_program, 0, NULL, NULL, NULL, NULL);
+
+	/* Print the error log if there are build errors. */
+	if (result == CL_BUILD_PROGRAM_FAILURE)
+	{
+		std::cout << "There were build errors: \n";
+
+		// Determine the size of the log
+		size_t log_size;
+		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+		// Allocate memory for the log
+		char *log = (char *)malloc(log_size);
+
+		// Get the log
+		clGetProgramBuildInfo(_program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+		// Print the log
+		printf("%s\n", log);
+	}
+	else if (result != CL_SUCCESS)
+	{
+		std::cout << "Failed to build program.\n\n";
+		return false;
+	}
+
+
+
+	///* Create the kernel. */
+	//_kernel = clCreateKernel(_program, "halveBrightness", &result);
+
+	//if (result != CL_SUCCESS)
+	//{
+	//	std::cout << "Failed to create kernel.\n\n";
+	//	return false;
+	//}
+
 	///* Create input and output buffers. */
 	//_clStartPixels = clCreateBuffer(
 	//	_context, CL_MEM_READ_ONLY,
@@ -169,7 +222,7 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device)
 bool ReadKernelFile()
 {
 	std::ifstream fileStream;
-	fileStream.open(_kernelFile);
+	fileStream.open(_kernelFilePath);
 
 	if(!fileStream)
 	{
@@ -177,14 +230,22 @@ bool ReadKernelFile()
 		return false;
 	}
 
+	/* Get each line. */
 	std::string eachLine;
 	while (std::getline(fileStream, eachLine))
 	{
-		_kernel += eachLine;
+		_kernelString += eachLine;
 	}
 	fileStream.close();
 
-	std::cout << "Kernel file contents: \n" << _kernel;
+	/* Check that the file was not empty. */
+	if (_kernelString.length() < 1)
+	{
+		std::cout << "Kernel file is empty.";
+		return false;
+	}
+
+	//std::cout << "Kernel file contents: \n" << _kernel;
 
 	return true;
 }
