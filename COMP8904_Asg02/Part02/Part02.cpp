@@ -31,16 +31,19 @@ bool CreateContextForPlatform(cl_platform_id platform);
 /*========================================================================================
 	Fields
 ========================================================================================*/
-cl_uint numPlatforms;
-std::vector<cl_platform_id> platformIds;
-std::map<cl_platform_id, std::vector<cl_device_id>> platforms;
+cl_uint _numPlatforms;
+std::vector<cl_platform_id> _platformIds;
+std::map<cl_platform_id, std::vector<cl_device_id>> _platforms;
 
-cl_platform_id cpuPlatform;
-cl_platform_id gpuPlatform;
-cl_device_id cpuDevice;
-cl_device_id gpuDevice;
+cl_platform_id _cpuPlatform;
+cl_platform_id _gpuPlatform;
+cl_device_id _cpuDevice;
+cl_device_id _gpuDevice;
 
-cl_context context;
+cl_context _context;
+
+const cl_uint NUM_PIXELS = 10;
+std::vector<cl_float4> _pixels;
 
 /*========================================================================================
 	Main Function
@@ -59,7 +62,7 @@ int main()
 		return 1;
 	}
 
-	if (!CreateContextForPlatform(cpuPlatform))
+	if (!CreateContextForPlatform(_cpuPlatform))
 	{
 		std::cin.ignore();
 		return 1;
@@ -85,9 +88,9 @@ bool CreateContextForPlatform(cl_platform_id platform)
 
 	/* Create the context. */
 	cl_int result = 0;
-	context = clCreateContext(
-		contextProperties, platforms[platform].size(),
-		platforms[platform].data(), nullptr,
+	_context = clCreateContext(
+		contextProperties, _platforms[platform].size(),
+		_platforms[platform].data(), nullptr,
 		nullptr, &result
 	);
 
@@ -100,10 +103,10 @@ bool CreateContextForPlatform(cl_platform_id platform)
 bool GetCpuAndGpu()
 {
 	/* Find the platform with the GPU. */
-	gpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_GPU);
-	if (gpuPlatform)
+	_gpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_GPU);
+	if (_gpuPlatform)
 	{
-		gpuDevice = GetFirstDeviceOfTypeFromPlatform(gpuPlatform, CL_DEVICE_TYPE_GPU);
+		_gpuDevice = GetFirstDeviceOfTypeFromPlatform(_gpuPlatform, CL_DEVICE_TYPE_GPU);
 	}
 	else
 	{
@@ -112,21 +115,21 @@ bool GetCpuAndGpu()
 	}
 
 	/* Check the GPU platform for a CPU device. */
-	cpuDevice = GetFirstDeviceOfTypeFromPlatform(gpuPlatform, CL_DEVICE_TYPE_CPU);
+	_cpuDevice = GetFirstDeviceOfTypeFromPlatform(_gpuPlatform, CL_DEVICE_TYPE_CPU);
 
-	if (cpuDevice)
+	if (_cpuDevice)
 	{
-		cpuPlatform = gpuPlatform;
+		_cpuPlatform = _gpuPlatform;
 	}
 	else
 	{
 		/* If the CPU is not on the same platform as the GPU, check the other platforms. */
-		cpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_CPU);
+		_cpuPlatform = GetFirstPlatformWithDeviceOfType(CL_DEVICE_TYPE_CPU);
 
 		/* Get the CPU device if we found a platform for it and error out if we didn't. */
-		if (cpuPlatform)
+		if (_cpuPlatform)
 		{
-			cpuDevice = GetFirstDeviceOfTypeFromPlatform(cpuPlatform, CL_DEVICE_TYPE_CPU);
+			_cpuDevice = GetFirstDeviceOfTypeFromPlatform(_cpuPlatform, CL_DEVICE_TYPE_CPU);
 		}
 		else
 		{
@@ -136,10 +139,10 @@ bool GetCpuAndGpu()
 	}
 
 	/* Print out info on CPU and GPU. */
-	std::cout << "Platform containing CPU is " << cpuPlatform << "\n";
-	std::cout << "CPU is device " << cpuDevice << "\n\n";
-	std::cout << "Platform containing GPU is " << gpuPlatform << "\n";
-	std::cout << "GPU is device " << gpuDevice << "\n\n";
+	std::cout << "Platform containing CPU is " << _cpuPlatform << "\n";
+	std::cout << "CPU is device " << _cpuDevice << "\n\n";
+	std::cout << "Platform containing GPU is " << _gpuPlatform << "\n";
+	std::cout << "GPU is device " << _gpuDevice << "\n\n";
 
 	return true;
 }
@@ -150,7 +153,7 @@ bool GetCpuAndGpu()
 */
 cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind)
 {
-	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in platforms)
+	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in _platforms)
 	{
 		if (GetFirstDeviceOfTypeFromPlatform(eachPlatform.first, typeToFind))
 		{
@@ -167,7 +170,7 @@ cl_platform_id GetFirstPlatformWithDeviceOfType(cl_device_type typeToFind)
 */
 cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device_type typeToFind)
 {
-	for each (cl_device_id eachDevice in platforms[platform])
+	for each (cl_device_id eachDevice in _platforms[platform])
 	{
 		cl_device_type deviceType;
 		clGetDeviceInfo(eachDevice, CL_DEVICE_TYPE, sizeof(cl_device_id), &deviceType, nullptr);
@@ -187,27 +190,27 @@ cl_device_id GetFirstDeviceOfTypeFromPlatform(cl_platform_id platform, cl_device
 void GetAvailablePlatforms()
 {
 	/* Get the number of available platforms. */
-	numPlatforms = 0;
-	clGetPlatformIDs(0, nullptr, &numPlatforms);
+	_numPlatforms = 0;
+	clGetPlatformIDs(0, nullptr, &_numPlatforms);
 
 	/* Get the IDs of available platforms. */
-	platformIds = std::vector<cl_platform_id>(numPlatforms);
-	clGetPlatformIDs(numPlatforms, platformIds.data(), nullptr);
+	_platformIds = std::vector<cl_platform_id>(_numPlatforms);
+	clGetPlatformIDs(_numPlatforms, _platformIds.data(), nullptr);
 
 	/* Get the devices for each platform. */
-	platforms = std::map<cl_platform_id, std::vector<cl_device_id>>();
-	for each (cl_platform_id eachPlatform in platformIds)
+	_platforms = std::map<cl_platform_id, std::vector<cl_device_id>>();
+	for each (cl_platform_id eachPlatform in _platformIds)
 	{
 		cl_uint numDevices = 0;
 		clGetDeviceIDs(eachPlatform, CL_DEVICE_TYPE_ALL, 0, nullptr, &numDevices);
 
-		platforms[eachPlatform] = std::vector<cl_device_id>(numDevices);
-		clGetDeviceIDs(eachPlatform, CL_DEVICE_TYPE_ALL, numDevices, platforms[eachPlatform].data(), nullptr);
+		_platforms[eachPlatform] = std::vector<cl_device_id>(numDevices);
+		clGetDeviceIDs(eachPlatform, CL_DEVICE_TYPE_ALL, numDevices, _platforms[eachPlatform].data(), nullptr);
 	}
 
 	/* Print out platforms and devices. */
 	std::cout << "Detected the following platforms and devices:\n";
-	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in platforms)
+	for each (std::pair<cl_platform_id, std::vector<cl_device_id>> eachPlatform in _platforms)
 	{
 		std::cout << "\t" << eachPlatform.first << "\n";
 
