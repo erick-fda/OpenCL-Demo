@@ -37,6 +37,7 @@ bool SetUpCL(cl_platform_id platform, cl_device_id device);
 bool ReadKernelFile();
 bool ExecuteKernel();
 bool CheckKernelResults();
+void CleanUpCl();
 
 /*========================================================================================
 	Fields
@@ -117,7 +118,24 @@ int main()
 	std::cout << "OpenCL example finished successfully!\n\n";
 
 	std::cin.ignore();
+
+	CleanUpCl();
+
 	return 0;
+}
+
+/**
+	Clean up OpenCL memory objects.
+*/
+void CleanUpCl()
+{
+	/* Free OpenCL memory objects. */
+	clReleaseMemObject(_clStartPixels);
+	clReleaseMemObject(_clResultPixels);
+	clReleaseProgram(_program);
+	clReleaseKernel(_kernel);
+	clReleaseCommandQueue(_commandQueue);
+	clReleaseContext(_context);
 }
 
 /**
