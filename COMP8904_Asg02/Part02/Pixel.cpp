@@ -56,11 +56,11 @@ void Pixel::HalveBrightness(std::vector<cl_float4>& pixels, std::vector<cl_float
 
 	for each (cl_float4 eachPixel in pixels)
 	{
-		cl_float4 half = cl_float4();
-		half.x = eachPixel.x / 2;
-		half.y = eachPixel.y / 2;
-		half.z = eachPixel.z / 2;
-		half.w = eachPixel.w / 2;
+		float x = eachPixel.x / 2;
+		float y = eachPixel.y / 2;
+		float z = eachPixel.z / 2;
+		float w = eachPixel.w / 2;
+		cl_float4 half = {x, y, z, w};
 
 		resultPixels.push_back(half);
 	}
